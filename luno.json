@@ -1,0 +1,58 @@
+{
+  "name": "Comments",
+  "version": "1.0.0",
+  "description": "Federated Comments Engine & Living Documentation",
+  "type": "luno-web-app",
+  "mainClass": "Comments",
+  "entrypoint": {
+    "file": "js/Comments.js",
+    "class": "Comments",
+    "method": "run"
+  },
+  "main": [
+    "js/CommunityOracle.js",
+    "js/DialogBoxExtended.js",
+    "js/CommentStyles.js",
+    "js/NameRenderer.js",
+    "js/CommentNode.js",
+    "js/RatingPanel.js",
+    "js/CommentToolbar.js",
+    "js/CommentThreadView.js",
+    "js/UserManager.js",
+    "js/UserAccountDialog.js",
+    "js/MockServerAPI.js",
+    "js/ServerAPI.js",
+    "js/HarnessSettingsManager.js",
+    "js/TestHarness.js",
+    "js/CommentsOverviewContent.js",
+    "js/CommentsStylingContent.js",
+    "js/CommentsAuthIdentityContent.js",
+    "js/CommentsThreadingContent.js",
+    "js/CommentsApiContractContent.js",
+    "js/CommentsDomAnchorContent.js",
+    "js/CommentsAiModerationContent.js",
+    "js/CommentsFederationContent.js",
+    "js/CommentsDeploymentKitContent.js",
+    "js/CommentsInteractiveComponent.js",
+    "js/CommentsStylingLabComponent.js",
+    "js/CommentsAiDictationSimulatorComponent.js",
+    "js/CommentsPromptGeneratorComponent.js",
+    "js/CommentsItemNotes.js",
+    "js/CommentsNotesManager.js",
+    "js/CommentsDocumentEditor.js",
+    "js/CommentsDataRegistry.js",
+    "js/CommentsAardvark.js",
+    "js/Comments.js"
+  ],
+  "library": [
+    "DomBasics.js",
+    "UITools.js",
+    "DocumentReader.js",
+    "DictationWidget.js",
+    "SliderControl.js",
+    "SidePanel.js"
+  ],
+  "styles": [
+    "css/comments.css"
+  ]
+}
