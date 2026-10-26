@@ -25,24 +25,27 @@ class Comments {
   }
 
   async run(env) {
-    if (!env || !env.container) {
-      throw new Error('[Comments] run() requires an environment with a valid container.');
-    }
+      if (!env || !env.container) {
+        throw new Error('[Comments] run() requires an environment with a valid container.');
+      }
 
-    this.env = env;
-    this.rootElement = env.container;
-    this.rootElement.innerHTML = '';
-    this.rootElement.style.overflowY = 'auto';
-    this.rootElement.style.minHeight = '100vh';
-    this.rootElement.style.boxSizing = 'border-box';
+      if (this.rootElement) {
+        this.destroy();
+      }
 
-    // 1. Sync Community identities from CommunityOracle
-    if (typeof CommunityOracle !== 'undefined' && typeof CommunityOracle.loadProfiles === 'function') {
-      CommunityOracle.loadProfiles();
-    }
+      this.env = env;
+      this.rootElement = env.container;
+      this.rootElement.innerHTML = '';
+      this.rootElement.style.overflowY = 'auto';
+      this.rootElement.style.minHeight = '100vh';
+      this.rootElement.style.boxSizing = 'border-box';
+      this.rootElement.style.transition = 'margin-left 0.25s cubic-bezier(0.2, 0.0, 0.2, 1), width 0.25s cubic-bezier(0.2, 0.0, 0.2, 1)';
 
-    // 2. If DocumentReader is present in library, render the living specification with embedded threads
-    if (typeof DocumentReader !== 'undefined') {
+      // Sync Community profiles
+      if (typeof CommunityOracle !== 'undefined' && typeof CommunityOracle.loadProfiles === 'function') {
+        CommunityOracle.loadProfiles();
+      }
+
       const pages = [
         { id: 'overview', title: '0. Architecture & Modern Horizon', docClass: () => globalThis.CommentsOverviewContent },
         { id: 'styling', title: '1. Styling, Theming & Micro-Threads', docClass: () => globalThis.CommentsStylingContent },
@@ -55,153 +58,226 @@ class Comments {
         { id: 'deployment_kit', title: '8. Drop-In Deployment Kit & Prompt Generator', docClass: () => globalThis.CommentsDeploymentKitContent }
       ];
 
-      this.reader = new DocumentReader({
-        container: this.rootElement,
-        brandTitle: 'Comments System & Community Oracle',
-        brandIcon: '💬',
-        dossierId: 'Comments',
-        pages: pages
-      });
-      await this.reader.init();
+      if (typeof DocumentReader !== 'undefined') {
+        this.reader = new DocumentReader({
+          container: this.rootElement,
+          brandTitle: 'Comments System & Community Oracle',
+          brandIcon: '💬',
+          dossierId: 'Comments',
+          pages: pages
+        });
+        await this.reader.init();
 
-      if (typeof SidePanel !== 'undefined') {
-        this.sidePanel = new SidePanel('left', 340, null);
-        this._buildSidePanelNavigation(pages);
-        this.sidePanel.open();
-      }
+        if (typeof SidePanel !== 'undefined') {
+          this.sidePanel = new SidePanel('left', 340, null);
+          this._buildSidePanelNavigation(pages);
 
-      if (typeof CommentsAardvark !== 'undefined') {
-        this.aardvark = new CommentsAardvark({ container: this.rootElement, dossierId: 'Comments' });
-        this.aardvark.init();
-      }
-    } else {
-      // 3. Fallback: Initialize directly as full-page comment widget
-      await this.init(this.rootElement);
-      if (typeof TestHarness !== 'undefined') {
-        const harness = new TestHarness(this);
-        harness.init();
-        window.harness = harness;
-      }
-    }
-
-    window.commentsApp = this;
-    return this;
-  }
-
-  _buildSidePanelNavigation(pages) {
-    if (!this.sidePanel) return;
-
-    this.sidePanel.header.innerHTML = '';
-    const headerTitle = makeElement('div', {
-      style: {
-        fontFamily: 'monospace',
-        fontSize: '11px',
-        fontWeight: 'bold',
-        color: '#00f2fe',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flex: 1
-      }
-    }, [
-      makeElement('span', {}, '💬'),
-      makeElement('span', {}, 'Comments System & Spec')
-    ]);
-
-    const closeBtn = makeElement('button', {
-      className: 'dr-nav-btn',
-      style: { padding: '2px 8px', fontSize: '10px' },
-      onclick: () => this.sidePanel.close()
-    }, '✕');
-
-    this.sidePanel.header.append(headerTitle, closeBtn);
-
-    const container = this.sidePanel.contentContainer;
-    container.innerHTML = '';
-    container.style.cssText = 'flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px;';
-
-    // 1. Community User Identity Status Pill
-    const profilesCount = typeof CommunityOracle !== 'undefined' ? CommunityOracle.getAllProfiles().length : 5;
-    const communityBox = makeElement('div', {
-      style: {
-        background: 'rgba(0, 242, 254, 0.08)',
-        border: '1px solid rgba(0, 242, 254, 0.25)',
-        borderRadius: '8px',
-        padding: '8px 10px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '11px',
-        fontFamily: 'monospace'
-      }
-    }, [
-      makeElement('div', {}, [
-        makeElement('strong', { style: { color: '#00f2fe', display: 'block' } }, '🌐 Community Oracle'),
-        makeElement('span', { style: { color: '#94a3b8', fontSize: '10px' } }, `${profilesCount} Profiles Active`)
-      ]),
-      makeElement('button', {
-        className: 'dr-nav-btn',
-        style: { fontSize: '10px', padding: '3px 8px', color: '#10b981' },
-        onclick: () => this.showAuthDialog()
-      }, 'Switch Identity')
-    ]);
-    container.appendChild(communityBox);
-
-    // 2. Chapters List
-    const chaptersWrap = makeElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
-
-    pages.forEach((page) => {
-      const isCur = page.id === (this.activePageId || 'overview');
-      const card = makeElement('div', {
-        className: `cp-chapter-card ${isCur ? 'active' : ''}`,
-        style: {
-          padding: '8px 10px',
-          border: '1px solid #1e293b',
-          borderRadius: '6px',
-          background: isCur ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
-          cursor: 'pointer'
-        },
-        onclick: () => this.selectChapter(page.id)
-      }, [
-        makeElement('strong', {
-          style: {
-            fontSize: '11px',
-            color: isCur ? '#00f2fe' : '#f8fafc',
-            display: 'block'
-          }
-        }, page.title)
-      ]);
-      chaptersWrap.appendChild(card);
-    });
-    container.appendChild(chaptersWrap);
-
-    // 3. Living Spec Tools
-    const toolsBox = makeElement('div', {
-      style: {
-        marginTop: 'auto',
-        paddingTop: '10px',
-        borderTop: '1px solid #1e293b',
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '6px'
-      }
-    }, [
-      makeElement('button', {
-        className: 'dr-nav-btn',
-        style: { color: '#00f2fe', fontSize: '10px', padding: '6px' },
-        onclick: () => {
-          if (typeof CommentsItemNotes !== 'undefined') CommentsItemNotes.openPromptBuilderDialog(this.reader);
+          this._safeAreaHandler = (e) => {
+            const left = e.detail?.left || 0;
+            if (this.rootElement) {
+              this.rootElement.style.marginLeft = `${left}px`;
+              this.rootElement.style.width = left > 0 ? `calc(100% - ${left}px)` : '100%';
+            }
+          };
+          window.addEventListener('layout-safe-area-change', this._safeAreaHandler);
+          this.sidePanel.open();
         }
-      }, '⚡ Living Spec Prompt'),
-      makeElement('button', {
-        className: 'dr-nav-btn',
-        style: { color: '#38bdf8', fontSize: '10px', padding: '6px' },
-        onclick: () => this.selectChapter('deployment_kit')
-      }, '📦 1-Click Drop-in')
-    ]);
-    container.appendChild(toolsBox);
-  }
 
+        // Initialize Aardvark and expose globally to satisfy DocumentReader and shortcut routers
+        const AardvarkCls = globalThis.CommentsAardvark || globalThis.CadPlanAardvark;
+        if (AardvarkCls) {
+          this.aardvark = new AardvarkCls({ container: this.rootElement, dossierId: 'Comments' });
+          this.aardvark.init();
+        }
+
+        // Maintain bidirectional handles
+        window.commentsApp = this;
+        globalThis._cadPlanInstance = this;
+      } else {
+        await this.init(this.rootElement);
+        if (typeof TestHarness !== 'undefined') {
+          const harness = new TestHarness(this);
+          harness.init();
+          window.harness = harness;
+        }
+        window.commentsApp = this;
+        globalThis._cadPlanInstance = this;
+      }
+
+      return this;
+    }
+  _buildSidePanelNavigation(pages) {
+      if (!this.sidePanel) return;
+
+      this.sidePanel.header.innerHTML = '';
+      const headerTitle = makeElement('div', {
+        style: {
+          fontFamily: 'monospace',
+          fontSize: '11px',
+          fontWeight: 'bold',
+          color: '#00f2fe',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          flex: 1
+        }
+      }, [
+        makeElement('span', {}, '💬'),
+        makeElement('span', {}, 'Comments & Community Engine')
+      ]);
+
+      const closeBtn = makeElement('button', {
+        className: 'dr-nav-btn',
+        style: { padding: '2px 8px', fontSize: '10px' },
+        onclick: () => this.sidePanel.close()
+      }, '✕');
+
+      this.sidePanel.header.append(headerTitle, closeBtn);
+
+      const container = this.sidePanel.contentContainer;
+      container.innerHTML = '';
+      container.style.cssText = 'flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px;';
+
+      // 1. Community User Identity Status Pill & Switcher
+      const currentProf = this.currentUser || (typeof CommunityOracle !== 'undefined' ? CommunityOracle.getProfile('u_rob') : null);
+
+      const communityBox = makeElement('div', {
+        style: {
+          background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.1) 0%, rgba(15, 23, 42, 0.8) 100%)',
+          border: '1.5px solid rgba(0, 242, 254, 0.35)',
+          borderRadius: '10px',
+          padding: '10px 12px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px',
+          fontSize: '11px',
+          fontFamily: 'monospace'
+        }
+      }, [
+        makeElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+          makeElement('strong', { style: { color: '#00f2fe', display: 'flex', alignItems: 'center', gap: '6px' } }, [
+            makeElement('span', {}, '🌐'),
+            'Community Identity'
+          ]),
+          makeElement('span', { style: { color: '#10b981', fontSize: '10px', fontWeight: 'bold' } }, `${Math.round((currentProf?.reputation || 0.98) * 100)}% Rep`)
+        ]),
+        makeElement('div', { style: { color: '#f8fafc', fontSize: '12px', fontWeight: 'bold' } },
+          `${currentProf?.displayName || currentProf?.name || 'Rob Brown'} #${currentProf?.tag || currentProf?.suffix || 1001}`
+        ),
+        makeElement('div', { style: { display: 'flex', gap: '4px', flexWrap: 'wrap' } },
+          (currentProf?.badges || ['Architect', 'Verified']).map(b => makeElement('span', {
+            style: { background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '1px 6px', borderRadius: '4px', fontSize: '9px', fontWeight: 'bold' }
+          }, b))
+        ),
+        makeElement('div', { style: { display: 'flex', gap: '6px', marginTop: '4px' } }, [
+          makeElement('button', {
+            className: 'dr-nav-btn primary',
+            style: { flex: 1, padding: '4px 6px', fontSize: '10px', textAlign: 'center' },
+            onclick: () => this.showAuthDialog()
+          }, '👤 Switch User'),
+          makeElement('button', {
+            className: 'dr-nav-btn',
+            style: { padding: '4px 8px', fontSize: '10px', color: '#c084fc', borderColor: 'rgba(192, 132, 252, 0.4)' },
+            title: 'Direct Message / Private Whisper Channel',
+            onclick: () => this.showPrivateWhisperInbox()
+          }, '🤫 Whispers')
+        ])
+      ]);
+      container.appendChild(communityBox);
+
+      // 2. Cloud Database Connection Status Banner
+      const isCloudConnected = Boolean(typeof localStorage !== 'undefined' && localStorage.getItem('comments_supabase_url'));
+      const cloudStatusBanner = makeElement('div', {
+        style: {
+          background: isCloudConnected ? 'rgba(16, 185, 129, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid ' + (isCloudConnected ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'),
+          borderRadius: '8px',
+          padding: '8px 10px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          fontSize: '11px',
+          fontFamily: 'monospace'
+        }
+      }, [
+        makeElement('div', {}, [
+          makeElement('strong', { style: { color: isCloudConnected ? '#10b981' : '#f59e0b', display: 'block' } },
+            isCloudConnected ? '⚡ Supabase Online' : '○ Local Mock API'
+          ),
+          makeElement('span', { style: { color: '#94a3b8', fontSize: '9.5px' } },
+            isCloudConnected ? 'PostgreSQL RLS Active' : 'Free cloud setup available'
+          )
+        ]),
+        makeElement('button', {
+          className: 'dr-nav-btn',
+          style: { fontSize: '10px', padding: '3px 8px', color: '#00f2fe' },
+          onclick: () => {
+            if (typeof CloudDatabaseDialog !== 'undefined') {
+              CloudDatabaseDialog.open(this.serverAPI, () => {
+                this.loadInitialData();
+                this._buildSidePanelNavigation(pages);
+              });
+            }
+          }
+        }, 'Configure DB')
+      ]);
+      container.appendChild(cloudStatusBanner);
+
+      // 3. Chapters Navigation
+      const chaptersWrap = makeElement('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } });
+
+      pages.forEach((page) => {
+        const isCur = page.id === (this.activePageId || 'overview');
+        const card = makeElement('div', {
+          className: `cp-chapter-card ${isCur ? 'active' : ''}`,
+          style: {
+            padding: '8px 10px',
+            border: '1px solid ' + (isCur ? '#00f2fe' : '#1e293b'),
+            borderRadius: '6px',
+            background: isCur ? 'rgba(0, 242, 254, 0.08)' : 'rgba(255, 255, 255, 0.02)',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          },
+          onclick: () => this.selectChapter(page.id)
+        }, [
+          makeElement('strong', {
+            style: {
+              fontSize: '11px',
+              color: isCur ? '#00f2fe' : '#f8fafc',
+              display: 'block'
+            }
+          }, page.title)
+        ]);
+        chaptersWrap.appendChild(card);
+      });
+      container.appendChild(chaptersWrap);
+
+      // 4. Living Spec Compiler & Tools
+      const toolsBox = makeElement('div', {
+        style: {
+          marginTop: 'auto',
+          paddingTop: '10px',
+          borderTop: '1px solid #1e293b',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '6px'
+        }
+      }, [
+        makeElement('button', {
+          className: 'dr-nav-btn',
+          style: { color: '#00f2fe', fontSize: '10px', padding: '6px' },
+          onclick: () => {
+            if (typeof CommentsItemNotes !== 'undefined') CommentsItemNotes.openPromptBuilderDialog(this.reader);
+          }
+        }, '⚡ Living Spec Prompt'),
+        makeElement('button', {
+          className: 'dr-nav-btn',
+          style: { color: '#38bdf8', fontSize: '10px', padding: '6px' },
+          onclick: () => this.selectChapter('deployment_kit')
+        }, '📦 1-Click Drop-in')
+      ]);
+      container.appendChild(toolsBox);
+    }
   selectChapter(pageId) {
     this.activePageId = pageId;
     if (this.reader && typeof this.reader.switchPage === 'function') {
@@ -218,6 +294,10 @@ class Comments {
   }
 
   destroy() {
+    if (this._safeAreaHandler) {
+      window.removeEventListener('layout-safe-area-change', this._safeAreaHandler);
+      this._safeAreaHandler = null;
+    }
     if (this.aardvark) {
       this.aardvark.destroy();
       this.aardvark = null;
@@ -230,9 +310,11 @@ class Comments {
       this.reader.destroy();
       this.reader = null;
     }
+    if (typeof UITools !== 'undefined' && typeof UITools.setSafeArea === 'function') {
+      UITools.setSafeArea({ left: 0, right: 0, top: 0, bottom: 0 });
+    }
     this.rootElement = null;
   }
-
   createPostBox(parentId, onPostCallback, onCancelCallback) {
     const form = makeElement('form', { className: 'comment-post-box' });
 
@@ -607,6 +689,137 @@ class Comments {
       });
     }
   }
+
+  showPrivateWhisperInbox() {
+      const user = this.currentUser || (typeof CommunityOracle !== 'undefined' ? CommunityOracle.getProfile('u_rob') : { name: 'Rob Brown', tag: 1001 });
+      const content = makeElement('div', {
+        style: {
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+          color: '#f8fafc',
+          fontFamily: 'var(--dr-font-sans, system-ui, sans-serif)',
+          fontSize: '12px'
+        }
+      });
+
+      const header = makeElement('div', {
+        style: {
+          padding: '10px',
+          background: 'rgba(192, 132, 252, 0.1)',
+          border: '1px solid rgba(192, 132, 252, 0.35)',
+          borderRadius: '8px',
+          lineHeight: '1.45'
+        }
+      }, [
+        makeElement('strong', { style: { color: '#c084fc', display: 'block', marginBottom: '2px' } }, '🤫 Private Whisper & Coaching Channel'),
+        'These messages are delivered privately to you from the community AI coach or peer reviewers. They never appear publicly on the thread.'
+      ]);
+      content.appendChild(header);
+
+      const whisperList = makeElement('div', {
+        style: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '320px', overflowY: 'auto' }
+      });
+
+      const mockWhispers = [
+        {
+          from: 'AI Community Coach',
+          time: '15m ago',
+          text: 'Your response on transaction throughput was highly accurate. A gentler opening sentence would help beginner contributors engage without defensiveness.',
+          tag: 'Tone Calibration'
+        },
+        {
+          from: 'Sarah #1002 (Peer Whisper)',
+          time: '1h ago',
+          text: 'Check your XPath query on block_3; it needs a fallback for mobile screens.',
+          tag: 'Technical Direct'
+        }
+      ];
+
+      mockWhispers.forEach(w => {
+        whisperList.appendChild(makeElement('div', {
+          style: {
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid #1e293b',
+            borderLeft: '3px solid #c084fc',
+            borderRadius: '6px',
+            padding: '8px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '4px'
+          }
+        }, [
+          makeElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+            makeElement('strong', { style: { color: '#c084fc', fontSize: '11px' } }, w.from),
+            makeElement('span', { style: { color: '#64748b', fontSize: '10px' } }, w.time)
+          ]),
+          makeElement('div', { style: { color: '#cbd5e1', lineHeight: '1.4' } }, w.text),
+          makeElement('span', { style: { fontSize: '9.5px', color: '#00f2fe', fontFamily: 'monospace' } }, `[${w.tag}]`)
+        ]));
+      });
+
+      content.appendChild(whisperList);
+
+      new DialogBoxExtended({
+        title: `Whisper Channel: ${user.displayName || user.name} #${user.tag || user.suffix || 1001}`,
+        content,
+        buttons: [{ label: 'Close', isCloseButton: true }]
+      });
+    }
+
+  renderDemoBanner() {
+      // Clean, non-intrusive demo banner with direct access to Cloud DB setup
+      const kicker = makeElement('div', { className: 'demo-mode-banner-kicker' }, 'Cloud Database & Mock Mode');
+      const message = makeElement('div', { className: 'demo-mode-banner-message' });
+
+      const toggleTrack = makeElement(
+        'span',
+        { className: 'demo-mode-toggle-track' },
+        makeElement('span', { className: 'demo-mode-toggle-fill' }),
+        makeElement('span', { className: 'demo-mode-toggle-label demo-mode-toggle-real' }, 'Live Cloud'),
+        makeElement('span', { className: 'demo-mode-toggle-label demo-mode-toggle-surreal' }, 'Mock API')
+      );
+
+      const toggle = makeElement('button', {
+        type: 'button',
+        className: 'demo-mode-banner-toggle',
+        onclick: async () => {
+          const targetMode = this.apiMode === 'mock' ? 'live' : 'mock';
+          toggle.disabled = true;
+          await this.switchApiMode(targetMode);
+          toggle.disabled = false;
+        }
+      }, toggleTrack);
+
+      const banner = makeElement('div', { className: 'demo-mode-banner' }, [
+        makeElement('div', { className: 'demo-mode-banner-content' }, kicker, message),
+        makeElement('div', { className: 'demo-mode-banner-side', style: { display: 'flex', gap: '8px', alignItems: 'center' } }, [
+          makeElement('button', {
+            className: 'dr-nav-btn',
+            style: { padding: '4px 8px', fontSize: '10.5px', color: '#00f2fe' },
+            onclick: () => {
+              if (typeof CloudDatabaseDialog !== 'undefined') {
+                CloudDatabaseDialog.open(this.serverAPI, () => {
+                  this.loadInitialData();
+                });
+              }
+            }
+          }, '⚡ Config DB'),
+          toggle
+        ])
+      ]);
+
+      const wrapper = makeElement('div', { className: 'demo-mode-banner-wrapper' }, banner);
+
+      this.demoBannerWrapperElement = wrapper;
+      this.demoBannerElement = banner;
+      this.demoBannerTextElement = message;
+      this.demoBannerToggleElement = toggle;
+
+      this._applyDemoBannerTheme();
+      this.updateDemoBanner();
+      return wrapper;
+    }
 }
 
 globalThis.Comments = Comments;

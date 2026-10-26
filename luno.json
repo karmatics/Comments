@@ -1,6 +1,6 @@
 {
   "name": "Comments",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Federated Comments Engine & Living Documentation",
   "type": "luno-web-app",
   "mainClass": "Comments",
@@ -10,7 +10,6 @@
     "method": "run"
   },
   "main": [
-    "js/CommunityOracle.js",
     "js/DialogBoxExtended.js",
     "js/CommentStyles.js",
     "js/NameRenderer.js",
@@ -50,7 +49,8 @@
     "DocumentReader.js",
     "DictationWidget.js",
     "SliderControl.js",
-    "SidePanel.js"
+    "SidePanel.js",
+    "CommunityOracle.js"
   ],
   "styles": [
     "css/comments.css"

@@ -8,39 +8,38 @@ class CommentsApiContractContent {
   }
 
   static manifest() {
-    return [
-      {
-        section: 'sql_schema',
-        partLabel: 'Chapter 4 • Relational Schema',
-        title: 'PostgreSQL Relational Schema (Supabase / D1)',
-        blocks: [
-          { id: 'p_schema_1', type: 'p' },
-          { id: 'p_schema_2', type: 'p' },
-          { id: 'sidebar_sql_definition', type: 'sidebar', kicker: 'SQL DDL', title: 'Complete PostgreSQL Database Schema' }
-        ]
-      },
-      {
-        section: 'bot_defense',
-        partLabel: 'Chapter 4 • Security',
-        title: 'Invisible Bot Defense: Turnstile, Honeypots & Rate Limiting',
-        blocks: [
-          { id: 'p_bot_1', type: 'p' },
-          { id: 'p_bot_2', type: 'p' },
-          { id: 'sidebar_bot_defense_matrix', type: 'sidebar', kicker: 'Spam Defense', title: 'Multi-Tier Anti-Bot Architecture' }
-        ]
-      },
-      {
-        section: 'cors_github_pages',
-        partLabel: 'Chapter 4 • Cross-Origin',
-        title: 'Cross-Domain Calling from GitHub Pages',
-        blocks: [
-          { id: 'p_cors_1', type: 'p' },
-          { id: 'sidebar_cors_configuration', type: 'sidebar', kicker: 'CORS Headers', title: 'Universal Cross-Domain Authorization' }
-        ]
-      }
-    ];
-  }
-
+      return [
+        {
+          section: 'supabase_quickstart',
+          partLabel: 'Chapter 4 • Cloud Setup',
+          title: '3-Minute Free Database Setup (Supabase PostgreSQL + RLS)',
+          blocks: [
+            { id: 'p_supabase_steps_1', type: 'p' },
+            { id: 'p_supabase_steps_2', type: 'p' },
+            { id: 'sidebar_sql_definition', type: 'sidebar', kicker: 'Copy & Paste DDL', title: 'Complete PostgreSQL Database Schema with RLS' }
+          ]
+        },
+        {
+          section: 'bot_defense',
+          partLabel: 'Chapter 4 • Security',
+          title: 'Invisible Bot Defense: Turnstile, Honeypots & Rate Limiting',
+          blocks: [
+            { id: 'p_bot_1', type: 'p' },
+            { id: 'p_bot_2', type: 'p' },
+            { id: 'sidebar_bot_defense_matrix', type: 'sidebar', kicker: 'Spam Defense', title: 'Multi-Tier Anti-Bot Architecture' }
+          ]
+        },
+        {
+          section: 'cors_github_pages',
+          partLabel: 'Chapter 4 • Cross-Origin',
+          title: 'Cross-Domain Calling from GitHub Pages',
+          blocks: [
+            { id: 'p_cors_1', type: 'p' },
+            { id: 'sidebar_cors_configuration', type: 'sidebar', kicker: 'CORS Headers', title: 'Universal Cross-Domain Authorization' }
+          ]
+        }
+      ];
+    }
   static p_schema_1() {
     return [
       "Instead of writing and maintaining a custom Node.js server with manual connection pooling, we model our comments backend directly on PostgreSQL using Supabase or serverless SQLite using Cloudflare D1. This architecture is free for up to 50,000 monthly active users and easily handles millions of comment records.",
@@ -131,6 +130,27 @@ class CommentsApiContractContent {
       "• Methods: `GET`, `POST`, `PATCH`, `DELETE`, `OPTIONS`."
     ];
   }
+
+  static p_supabase_steps_1() {
+      return [
+        "Setting up your live cloud database requires **zero server configuration, zero terminal commands, and zero monthly fees**. We use Supabase (hosted PostgreSQL) as the persistent backend.",
+        "**How to configure your live database in under 3 minutes:**\n" +
+        "1. Go to **supabase.com** and click 'Start your project' (sign in with your GitHub account) [1].\n" +
+        "2. Click 'New Project', name it `community-db`, choose a secure password, and select your nearest region [1].\n" +
+        "3. Once created, click the **SQL Editor** tab (the `>_` terminal icon) on the left sidebar [1].\n" +
+        "4. Click **New Query**, paste the complete SQL script in the box below, and click **Run** [1]."
+      ];
+    }
+
+  static p_supabase_steps_2() {
+      return [
+        "5. Finally, click **Project Settings** (gear icon) ➔ **API** [1].\n" +
+        "   • Copy your **Project URL** (e.g. `https://xyzcompany.supabase.co`) [1].\n" +
+        "   • Copy your **anon public key** (starts with `eyJ...`) [1].\n" +
+        "6. Paste those two strings into your application config or the toolbar settings dialog.",
+        "That's it! Your static GitHub Pages sites across any domain can now write and read comments, manage discriminator tags, and sync user reputation with sub-50ms latency globally [1, 3]."
+      ];
+    }
 }
 
 globalThis.CommentsApiContractContent = CommentsApiContractContent;

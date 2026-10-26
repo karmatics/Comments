@@ -72,10 +72,10 @@ class MockServerAPI {
   }
 
   async _seedInitialData() {
-    this.db = { users: [], threads: { main: [] } };
+    this.db = { users: [], threads: {} };
     this.currentUser = null;
 
-    // 1. Synchronize seed users from CommunityOracle
+    // 1. Sync Community identities from CommunityOracle
     if (typeof CommunityOracle !== 'undefined') {
       const profiles = CommunityOracle.getAllProfiles();
       this.db.users = profiles.map(p => ({
@@ -96,8 +96,9 @@ class MockServerAPI {
       ];
     }
 
-    // 2. Seed threads with authentic community author IDs and PageRank prominence
     const now = Date.now();
+
+    // 2. Built-in seed threads (guaranteed display without remote file fetches)
     this.db.threads['main'] = [
       {
         id: 'c_seed_1',
@@ -119,7 +120,7 @@ class MockServerAPI {
           {
             id: 'c_seed_3',
             userId: 'u_dave1',
-            text: 'And our discriminator tags (#1042 vs #1005) prevent identity collision when multiple Daves participate.',
+            text: 'And our discriminator tags (#1042 vs #1005) prevent identity collision when multiple Daves participate in the same conversation.',
             timestamp: new Date(now - 3600000).toISOString(),
             prominence: 72,
             score: 8,
@@ -140,7 +141,7 @@ class MockServerAPI {
       {
         id: 'c_seed_5',
         userId: 'u_alex',
-        text: 'Probationary comments start slightly subdued until reviewed or affirmed by reputable peers.',
+        text: 'Probationary comments start slightly subdued in opacity until reviewed or affirmed by reputable peers.',
         timestamp: new Date(now - 900000).toISOString(),
         prominence: 45,
         score: 1,
@@ -148,9 +149,41 @@ class MockServerAPI {
       }
     ];
 
-    // Set default active session to Rob Brown
+    this.db.threads['design_critique'] = [
+      {
+        id: 'c_dc_1',
+        userId: 'u_sarah',
+        text: 'The layout of these threaded nodes makes multi-tier nesting easy to follow without losing visual hierarchy.',
+        timestamp: new Date(now - 4200000).toISOString(),
+        prominence: 90,
+        score: 12,
+        children: [
+          {
+            id: 'c_dc_2',
+            userId: 'u_dave1',
+            text: 'Notice my discriminator #1042 is highlighted because another Dave is in the system.',
+            timestamp: new Date(now - 2800000).toISOString(),
+            prominence: 75,
+            score: 6,
+            children: []
+          }
+        ]
+      }
+    ];
+
+    this.db.threads['quick_feedback'] = [
+      {
+        id: 'c_qf_1',
+        userId: 'u_rob',
+        text: 'Paragraph-anchored in-situ comments tether directly to the active document section.',
+        timestamp: new Date(now - 1500000).toISOString(),
+        prominence: 95,
+        score: 19,
+        children: []
+      }
+    ];
+
     this.currentUser = this.db.users[0];
-    console.log(`[MockServerAPI] Initialized with Community identities & ${this.db.threads['main'].length} root threads.`);
   }
   async getThreadData(threadId = 'main') {
     await this.initialized;

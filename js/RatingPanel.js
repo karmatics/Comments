@@ -165,37 +165,43 @@ class RatingPanel {
   }
 
   async submitRating() {
-    const app = this.commentNode.view.options.app;
-    if (!app.currentUser) {
-      alert('Please select an active identity from the toolbar before voting.');
-      return;
+      const app = this.commentNode.view.options.app;
+      if (!app.currentUser) {
+        alert('Please select an active identity from the toolbar or switch user before rating.');
+        return;
+      }
+
+      let voterReputation = 0.50;
+      if (typeof CommunityOracle !== 'undefined') {
+        voterReputation = CommunityOracle.getReputationWeight(app.currentUser.id);
+      }
+
+      const payload = {
+        commentId: this.commentNode.id,
+        userId: app.currentUser.id,
+        sliders: this.sliderValues,
+        voterReputation: voterReputation,
+        feedback: this.feedbackTextarea ? this.feedbackTextarea.value : ''
+      };
+
+      const result = await app.serverAPI.submitRating(payload);
+      if (result.success) {
+        // Calculate delta based on Insightful slider and voter's reputation
+        const insightDelta = ((this.sliderValues['Insightful'] || 50) - 50) * 0.4 * voterReputation;
+        const newProminence = Math.max(10, Math.min(100, Math.round(this.commentNode.prominence + insightDelta)));
+        this.commentNode.setProminence(newProminence);
+
+        const msg = `Rating submitted! Scaled by ${app.currentUser.displayName}'s reputation (${Math.round(voterReputation * 100)}% weight). Prominence updated to ${newProminence}%.`;
+        if (typeof ClientApp !== 'undefined' && ClientApp.showToast) {
+          ClientApp.showToast(msg, 'success', '⭐');
+        } else {
+          alert(msg);
+        }
+        this.hide();
+      } else {
+        alert('Error submitting rating: ' + (result.error || 'Failed'));
+      }
     }
-
-    let voterReputation = 0.50;
-    if (typeof CommunityOracle !== 'undefined') {
-      voterReputation = CommunityOracle.getReputationWeight(app.currentUser.id);
-    }
-
-    const payload = {
-      commentId: this.commentNode.id,
-      userId: app.currentUser.id,
-      sliders: this.sliderValues,
-      voterReputation: voterReputation,
-      feedback: this.feedbackTextarea ? this.feedbackTextarea.value : ''
-    };
-
-    const result = await app.serverAPI.submitRating(payload);
-    if (result.success) {
-      const insightDelta = ((this.sliderValues['Insightful'] || 50) - 50) * 0.4 * voterReputation;
-      const newProminence = Math.max(10, Math.min(100, Math.round(this.commentNode.prominence + insightDelta)));
-      this.commentNode.setProminence(newProminence);
-
-      alert(`Rating submitted! Scaled by ${app.currentUser.displayName}'s reputation (${Math.round(voterReputation * 100)}% weight). Prominence updated to ${newProminence}%.`);
-      this.hide();
-    } else {
-      alert('Error submitting rating: ' + (result.error || 'Failed'));
-    }
-  }
 }
 
 globalThis.RatingPanel = RatingPanel;

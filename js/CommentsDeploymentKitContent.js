@@ -31,12 +31,12 @@ class CommentsDeploymentKitContent {
   }
 
   static p_deploy_1() {
-    return [
-      "The primary deliverable of this specification is that **anyone can paste it into an LLM or drop it into their own website and have it immediately work**.",
-      "You do not have to write server code, manage database connection pools, or configure Node.js runtimes. The generator above produces a complete, self-contained payload containing the SQL schema, security policies, and HTML embed code [1]."
-    ];
-  }
-
+      return [
+        "The primary deliverable of this entire specification is that **anyone can paste it into an LLM or drop it into their own website and have it immediately work**.",
+        "You do not have to write server code, manage database connection pools, or configure Node.js runtimes. The generator above produces a complete, self-contained payload containing the SQL schema, security policies, and HTML embed code.",
+        "An LLM agent reading this specification can immediately generate the full client embed, set up the Supabase or Cloudflare D1 database, configure the `CommunityOracle` identity mappings, and mount the comments widget anywhere across the web."
+      ];
+    }
   static p_deploy_2() {
     return [
       "Because the client is modular and handles optimistic UI updates, your comments load instantaneously. Readers can reply, vote, collapse threads, and attach feedback with full fidelity across any domain."

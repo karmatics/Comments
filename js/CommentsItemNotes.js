@@ -38,55 +38,66 @@ class CommentsItemNotes {
   }
 
   static getLocalMap() {
-    try {
-      const raw = localStorage.getItem(this.LOCAL_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      return {};
+      try {
+        // Unified storage read across both keys
+        const raw1 = localStorage.getItem('comments_item_notes_v1');
+        const raw2 = localStorage.getItem('cadplan_item_notes_v1');
+        const map1 = raw1 ? JSON.parse(raw1) : {};
+        const map2 = raw2 ? JSON.parse(raw2) : {};
+        return Object.assign({}, map2, map1);
+      } catch (e) {
+        return {};
+      }
     }
-  }
 
   static saveLocalMap(map) {
-    try {
-      localStorage.setItem(this.LOCAL_STORAGE_KEY, JSON.stringify(map));
-    } catch (e) {}
-  }
+      try {
+        const json = JSON.stringify(map || {});
+        localStorage.setItem('comments_item_notes_v1', json);
+        localStorage.setItem('cadplan_item_notes_v1', json);
+      } catch (e) {}
+    }
 
   static async getAllNotes(dossierFilter = null) {
-    const db = await this.getDB();
-    let list = [];
+      const db = await this.getDB();
+      let list = [];
 
-    if (!db) {
       const map = this.getLocalMap();
-      Object.values(map).forEach(notes => list.push(...notes));
-    } else {
-      list = await new Promise((resolve) => {
-        const tx = db.transaction(this.STORE_NAME, 'readonly');
-        const store = tx.objectStore(this.STORE_NAME);
-        const req = store.getAll();
-        req.onsuccess = () => resolve(req.result || []);
-        req.onerror = () => {
-          const map = this.getLocalMap();
-          const fallback = [];
-          Object.values(map).forEach(notes => fallback.push(...notes));
-          resolve(fallback);
-        };
+      Object.values(map).forEach(notes => {
+        if (Array.isArray(notes)) list.push(...notes);
+      });
+
+      if (db) {
+        try {
+          const idbList = await new Promise((resolve) => {
+            const tx = db.transaction(this.STORE_NAME, 'readonly');
+            const store = tx.objectStore(this.STORE_NAME);
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+          });
+          if (idbList && idbList.length > 0) {
+            const seen = new Set(list.map(n => n.id));
+            idbList.forEach(n => {
+              if (!seen.has(n.id)) {
+                list.push(n);
+                seen.add(n.id);
+              }
+            });
+          }
+        } catch (e) {}
+      }
+
+      return list.sort((a, b) => a.timestamp - b.timestamp);
+    }
+  static async getNotesForBlock(pageId, blockId, dossierId = null) {
+      const all = await this.getAllNotes();
+      return all.filter(n => {
+        if (n.status === 'resolved') return false;
+        // Match by composite blockKey or by blockId
+        return n.blockKey === `${pageId}:${blockId}` || n.blockId === blockId;
       });
     }
-
-    if (dossierFilter) {
-      list = list.filter(n => !n.dossierId || n.dossierId === dossierFilter);
-    }
-
-    return list.sort((a, b) => a.timestamp - b.timestamp);
-  }
-
-  static async getNotesForBlock(pageId, blockId, dossierId = 'CommentsDocs') {
-    const blockKey = `${pageId}:${blockId}`;
-    const all = await this.getAllNotes(dossierId);
-    return all.filter(n => n.blockKey === blockKey && (!n.dossierId || n.dossierId === dossierId));
-  }
-
   static async getAnnotatedBlocks() {
     const all = await this.getAllNotes();
     const active = all.filter(n => n.status !== 'resolved');
@@ -106,100 +117,134 @@ class CommentsItemNotes {
   }
 
   static async addNote(pageId, blockId, text, options = {}) {
-    if (!text || !text.trim()) return null;
-    const dossierId = options.dossierId || 'CommentsDocs';
-    const blockKey = `${pageId}:${blockId}`;
-    const id = 'note_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
+      if (!text || !text.trim()) return null;
+      const dossierId = options.dossierId || 'CommentsDocs';
+      const blockKey = `${pageId}:${blockId}`;
+      const id = 'note_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now();
 
-    const entry = {
-      id,
-      blockKey,
-      pageId,
-      blockId,
-      dossierId,
-      text: text.trim(),
-      timestamp: Date.now(),
-      status: options.status || 'active',
-      author: options.author || (options.isLLM ? 'LLM' : 'Author / Reviewer'),
-      isLLM: Boolean(options.isLLM || options.author === 'LLM'),
-      type: options.type || (options.isLLM ? 'proposal' : 'note'),
-      proposedPatch: options.proposedPatch || null,
-      proposedText: options.proposedText || null,
-      blockPreview: options.blockPreview || '',
-      xpath: options.xpath || null,
-      cssPath: options.cssPath || null,
-      tagName: options.tagName || null,
-      isUniversalElement: Boolean(options.xpath || options.isUniversalElement)
-    };
+      const entry = {
+        id,
+        blockKey,
+        pageId,
+        blockId,
+        dossierId,
+        text: text.trim(),
+        timestamp: Date.now(),
+        status: options.status || 'active',
+        author: options.author || (options.isLLM ? 'LLM' : 'Author / Reviewer'),
+        isLLM: Boolean(options.isLLM || options.author === 'LLM'),
+        type: options.type || (options.isLLM ? 'proposal' : 'note'),
+        proposedPatch: options.proposedPatch || null,
+        proposedText: options.proposedText || null,
+        blockPreview: options.blockPreview || '',
+        xpath: options.xpath || null,
+        cssPath: options.cssPath || null,
+        tagName: options.tagName || null,
+        isUniversalElement: Boolean(options.xpath || options.isUniversalElement)
+      };
 
-    const map = this.getLocalMap();
-    const storageCompositeKey = `${dossierId}:${blockKey}`;
-    map[storageCompositeKey] = map[storageCompositeKey] || [];
-    map[storageCompositeKey].push(entry);
-    this.saveLocalMap(map);
+      const map = this.getLocalMap();
+      const storageCompositeKey = `${dossierId}:${blockKey}`;
+      map[storageCompositeKey] = map[storageCompositeKey] || [];
+      map[storageCompositeKey].push(entry);
+      this.saveLocalMap(map);
 
-    const db = await this.getDB();
-    if (db) {
-      try {
-        const tx = db.transaction(this.STORE_NAME, 'readwrite');
-        tx.objectStore(this.STORE_NAME).put(entry);
-      } catch (err) {}
+      const db = await this.getDB();
+      if (db) {
+        try {
+          const tx = db.transaction(this.STORE_NAME, 'readwrite');
+          tx.objectStore(this.STORE_NAME).put(entry);
+        } catch (err) {}
+      }
+
+      // Apply in-flow indicator to target DOM node immediately
+      const targetEl = document.querySelector(`[data-block="${blockId}"], [data-block-id="${blockId}"], #${blockId}`);
+      if (targetEl) {
+        targetEl.classList.add('comments-has-notes');
+      }
+
+      this._notify();
+      return entry;
     }
-
-    this._notify();
-    return entry;
-  }
 
   static async updateNote(noteId, updates) {
-    const all = await this.getAllNotes();
-    const note = all.find(n => n.id === noteId);
-    if (!note) return null;
+      const all = await this.getAllNotes();
+      const note = all.find(n => n.id === noteId);
+      if (!note) return null;
 
-    Object.assign(note, updates, { updatedTimestamp: Date.now() });
+      Object.assign(note, updates, { updatedTimestamp: Date.now() });
 
-    const map = this.getLocalMap();
-    if (map[note.blockKey]) {
-      const idx = map[note.blockKey].findIndex(n => n.id === noteId);
-      if (idx !== -1) map[note.blockKey][idx] = note;
+      const map = this.getLocalMap();
+      let remainingOnBlock = 0;
+
+      Object.keys(map).forEach(compositeKey => {
+        if (compositeKey.endsWith(note.blockKey)) {
+          const idx = map[compositeKey].findIndex(n => n.id === noteId);
+          if (idx !== -1) map[compositeKey][idx] = note;
+          remainingOnBlock += map[compositeKey].filter(n => n.status !== 'resolved').length;
+        }
+      });
       this.saveLocalMap(map);
+
+      const db = await this.getDB();
+      if (db) {
+        try {
+          const tx = db.transaction(this.STORE_NAME, 'readwrite');
+          tx.objectStore(this.STORE_NAME).put(note);
+        } catch (err) {}
+      }
+
+      // Clean in-flow decorations if resolved
+      if (remainingOnBlock === 0) {
+        const targetEl = document.querySelector(`[data-block="${note.blockId}"], [data-block-id="${note.blockId}"], #${note.blockId}`);
+        if (targetEl) {
+          targetEl.classList.remove('comments-has-notes');
+          const badge = targetEl.querySelector('.comments-note-pill-badge');
+          if (badge) badge.remove();
+        }
+      }
+
+      this._notify();
+      return note;
     }
-
-    const db = await this.getDB();
-    if (db) {
-      try {
-        const tx = db.transaction(this.STORE_NAME, 'readwrite');
-        tx.objectStore(this.STORE_NAME).put(note);
-      } catch (err) {}
-    }
-
-    this._notify();
-    return note;
-  }
-
   static async deleteNote(noteId) {
-    const all = await this.getAllNotes();
-    const note = all.find(n => n.id === noteId);
-    if (!note) return false;
+      const all = await this.getAllNotes();
+      const note = all.find(n => n.id === noteId);
+      if (!note) return false;
 
-    const map = this.getLocalMap();
-    if (map[note.blockKey]) {
-      map[note.blockKey] = map[note.blockKey].filter(n => n.id !== noteId);
-      if (map[note.blockKey].length === 0) delete map[note.blockKey];
+      const map = this.getLocalMap();
+      let remainingOnBlock = 0;
+
+      Object.keys(map).forEach(compositeKey => {
+        if (compositeKey.endsWith(note.blockKey)) {
+          map[compositeKey] = map[compositeKey].filter(n => n.id !== noteId);
+          remainingOnBlock += map[compositeKey].filter(n => n.status !== 'resolved').length;
+          if (map[compositeKey].length === 0) delete map[compositeKey];
+        }
+      });
       this.saveLocalMap(map);
+
+      const db = await this.getDB();
+      if (db) {
+        try {
+          const tx = db.transaction(this.STORE_NAME, 'readwrite');
+          tx.objectStore(this.STORE_NAME).delete(noteId);
+        } catch (err) {}
+      }
+
+      // If no active notes remain on this element, restore document to original unadorned state
+      if (remainingOnBlock === 0) {
+        const targetEl = document.querySelector(`[data-block="${note.blockId}"], [data-block-id="${note.blockId}"], #${note.blockId}`);
+        if (targetEl) {
+          targetEl.classList.remove('comments-has-notes');
+          const badge = targetEl.querySelector('.comments-note-pill-badge');
+          if (badge) badge.remove();
+        }
+      }
+
+      this._notify();
+      return true;
     }
-
-    const db = await this.getDB();
-    if (db) {
-      try {
-        const tx = db.transaction(this.STORE_NAME, 'readwrite');
-        tx.objectStore(this.STORE_NAME).delete(noteId);
-      } catch (err) {}
-    }
-
-    this._notify();
-    return true;
-  }
-
   static subscribe(fn) {
     this._subscribers.add(fn);
     return () => this._subscribers.delete(fn);
@@ -451,228 +496,270 @@ class CommentsItemNotes {
   }
 
   static async openBlockNotesDialog(pageId, blockId, currentDoc, onUpdated, hostReader = null, extraOptions = {}) {
-    CommentsItemNotes.playHapticSound('click');
-    const dossierId = hostReader?.options?.dossierId || currentDoc?.name || 'CommentsDocs';
-    const docName = currentDoc?.name || (typeof currentDoc === 'function' ? currentDoc.name : 'DocumentContent');
-    const existing = await this.getNotesForBlock(pageId, blockId, dossierId);
+      CommentsItemNotes.playHapticSound('click');
+      const dossierId = hostReader?.options?.dossierId || currentDoc?.name || 'Comments';
+      const existingNotes = await this.getNotesForBlock(pageId, blockId, dossierId);
 
-    let targetEl = extraOptions?.targetElement ||
-                   document.querySelector(`[data-block-id="${blockId}"]`) ||
-                   document.querySelector(`[data-block="${blockId}"]`) ||
-                   document.getElementById(`block-${blockId}`) ||
-                   document.getElementById(blockId);
+      let targetEl = extraOptions?.targetElement ||
+                     document.querySelector(`[data-block-id="${blockId}"]`) ||
+                     document.querySelector(`[data-block="${blockId}"]`) ||
+                     document.getElementById(`block-${blockId}`) ||
+                     document.getElementById(blockId);
 
-    if (!targetEl && existing.length > 0 && existing[0].xpath) {
-      try {
-        const res = document.evaluate(existing[0].xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-        if (res.singleNodeValue) targetEl = res.singleNodeValue;
-      } catch (e) {}
-    }
-
-    const locator = extraOptions?.locator || (targetEl ? CommentsItemNotes.generateElementLocator(targetEl) : { key: blockId, isOfficial: true, xpath: '' });
-
-    let excerpt = '';
-    if (currentDoc && typeof currentDoc[blockId] === 'function') {
-      const val = currentDoc[blockId]();
-      excerpt = Array.isArray(val) ? val.join(' ') : String(val);
-    }
-    if (!excerpt && targetEl) {
-      excerpt = targetEl.textContent.trim();
-    }
-    if (!excerpt && existing[0]?.blockPreview) {
-      excerpt = existing[0].blockPreview;
-    }
-    if (excerpt.length > 150) excerpt = excerpt.substring(0, 150) + '...';
-
-    const wrap = makeElement('div', {
-      style: {
-        display: 'flex', flexDirection: 'column', height: '100%',
-        color: '#f8fafc', fontFamily: 'var(--cp-font-sans, system-ui, sans-serif)', gap: '10px',
-        background: 'linear-gradient(180deg, rgba(12, 18, 32, 0.98) 0%, rgba(7, 10, 19, 0.98) 100%)',
-        padding: '12px',
-        boxSizing: 'border-box'
+      if (!targetEl && existingNotes.length > 0 && existingNotes[0].xpath) {
+        try {
+          const res = document.evaluate(existingNotes[0].xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+          if (res.singleNodeValue) targetEl = res.singleNodeValue;
+        } catch (e) {}
       }
-    });
 
-    const humanCount = existing.filter(n => !n.isLLM).length;
-    const aiCount = existing.filter(n => n.isLLM).length;
+      const locator = extraOptions?.locator || (targetEl ? CommentsItemNotes.generateElementLocator(targetEl) : { key: blockId, isOfficial: true, xpath: '' });
 
-    const topBar = makeElement('div', {
-      style: {
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '8px 12px', borderBottom: '1.5px solid rgba(0, 242, 254, 0.35)',
-        background: 'rgba(0, 242, 254, 0.06)', borderRadius: '8px',
-        fontSize: '11px', fontFamily: 'var(--cp-font-mono, monospace)'
-      }
-    }, [
-      makeElement('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } }, [
-        makeElement('span', { style: { color: '#00f2fe', fontWeight: '800' } }, `🎯 ${locator.isOfficial ? `${docName}.${blockId}` : locator.key}`),
-        makeElement('span', {
-          style: { color: '#38bdf8', background: 'rgba(56, 189, 248, 0.18)', border: '1px solid #38bdf866', padding: '1px 8px', borderRadius: '12px' }
-        }, `👤 ${humanCount}`),
-        aiCount > 0 ? makeElement('span', {
-          style: { color: '#c084fc', background: 'rgba(192, 132, 252, 0.22)', padding: '1px 8px', borderRadius: '12px', border: '1px solid #c084fc88' }
-        }, `🤖 ${aiCount} Proposal${aiCount === 1 ? '' : 's'}`) : null
-      ]),
-      makeElement('span', { style: { color: '#64748b', fontSize: '10px' } }, `[${dossierId}]`)
-    ]);
-    wrap.appendChild(topBar);
+      // Clean, compact obsidian modal (460px x 360px)
+      const wrap = makeElement('div', { className: 'cp-clean-modal' });
 
-    if (excerpt) {
-      wrap.appendChild(makeElement('div', {
+      let activeTab = 'note';
+
+      const tabNoteBtn = makeElement('button', {
+        className: 'dr-tab-btn active',
+        style: { fontSize: '10.5px', padding: '2px 8px', borderRadius: '10px' },
+        onclick: () => switchTab('note')
+      }, `📝 Note (${existingNotes.length})`);
+
+      const tabThreadBtn = makeElement('button', {
+        className: 'dr-tab-btn',
+        style: { fontSize: '10.5px', padding: '2px 8px', borderRadius: '10px' },
+        onclick: () => switchTab('thread')
+      }, '💬 Thread');
+
+      const toastSlot = makeElement('div', { style: { display: 'none' } });
+
+      const header = makeElement('div', {
         style: {
-          background: 'rgba(0, 242, 254, 0.05)', borderLeft: '3.5px solid #00f2fe',
-          padding: '8px 12px', fontSize: '11.5px', color: '#cbd5e1', fontStyle: 'italic', borderRadius: '4px'
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          borderBottom: '1px solid #1e293b', paddingBottom: '4px', flexWrap: 'wrap', gap: '4px'
         }
-      }, `"${excerpt}"`));
-    }
+      }, [
+        makeElement('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, tabNoteBtn, tabThreadBtn),
+        makeElement('span', { style: { color: '#00f2fe', fontFamily: 'monospace', fontSize: '10.5px', fontWeight: 'bold' } },
+          `<${locator.isOfficial ? blockId : locator.key}>`
+        )
+      ]);
+      wrap.appendChild(header);
+      wrap.appendChild(toastSlot);
 
-    const threadList = makeElement('div', {
-      id: 'item-notes-thread-list',
-      style: {
-        flex: 1, minHeight: '160px', maxHeight: '240px', overflowY: 'auto',
-        display: 'flex', flexDirection: 'column', gap: '8px', paddingRight: '4px'
-      }
-    });
-    wrap.appendChild(threadList);
-
-    const renderThread = async () => {
-      threadList.innerHTML = '';
-      const notes = await CommentsItemNotes.getNotesForBlock(pageId, blockId, dossierId);
-
-      if (notes.length === 0) {
-        threadList.appendChild(makeElement('div', {
-          style: { padding: '24px 12px', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic', fontSize: '11.5px' }
-        }, 'No directives on this element. Dictate thoughts below or select an intent tag.'));
-        return;
-      }
-
-      notes.forEach((note) => {
-        const timeStr = new Date(note.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const isLLM = Boolean(note.isLLM || note.author === 'LLM');
-
-        const itemBox = makeElement('div', {
-          style: {
-            background: isLLM ? 'rgba(192, 132, 252, 0.1)' : 'rgba(0, 242, 254, 0.06)',
-            border: `1.5px solid ${isLLM ? '#c084fc' : '#00f2fe'}`,
-            borderRadius: '8px', padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: '6px'
-          }
-        }, [
-          makeElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
-            makeElement('span', {
-              style: {
-                fontSize: '10px', fontWeight: '800', textTransform: 'uppercase',
-                color: isLLM ? '#c084fc' : '#00f2fe', fontFamily: 'monospace'
-              }
-            }, isLLM ? '🤖 AI Staged Proposal' : `👤 ${note.author}`),
-            makeElement('span', { style: { fontSize: '9px', color: '#64748b' } }, `• ${timeStr}`)
-          ]),
-          makeElement('div', { style: { fontSize: '12px', color: '#f8fafc', lineHeight: '1.55', whiteSpace: 'pre-wrap' } }, note.text)
+      function showToast(msg) {
+        toastSlot.style.display = 'block';
+        toastSlot.innerHTML = '';
+        const t = makeElement('div', { className: 'cp-paste-toast' }, [
+          makeElement('span', {}, `📋 ${msg}`),
+          makeElement('button', {
+            style: { background: 'none', border: 'none', color: '#00f2fe', cursor: 'pointer', padding: '0 4px', fontWeight: 'bold' },
+            onclick: () => { toastSlot.style.display = 'none'; }
+          }, '✕')
         ]);
+        toastSlot.appendChild(t);
+        setTimeout(() => { toastSlot.style.display = 'none'; }, 2600);
+      }
 
-        threadList.appendChild(itemBox);
+      // Panel 1: Spec Note
+      const notePanel = makeElement('div', {
+        style: { display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, overflow: 'hidden' }
       });
-    };
 
-    await renderThread();
-
-    const dictationMount = makeElement('div', {
-      style: { minHeight: '110px', display: 'flex', flexDirection: 'column', position: 'relative' }
-    });
-    wrap.appendChild(dictationMount);
-
-    let dictationWidget = null;
-    if (typeof DictationWidget !== 'undefined') {
-      dictationWidget = new DictationWidget({
-        compact: true,
-        placeholder: '🎙️ Dictate directive, or type note for this element...'
+      const notesList = makeElement('div', {
+        style: { flex: 1, minHeight: '75px', maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }
       });
-      dictationMount.appendChild(dictationWidget.getElement());
-    } else {
+      notePanel.appendChild(notesList);
+
+      const renderNotes = async () => {
+        notesList.innerHTML = '';
+        const notes = await CommentsItemNotes.getNotesForBlock(pageId, blockId, dossierId);
+        tabNoteBtn.textContent = `📝 Note (${notes.length})`;
+
+        if (notes.length === 0) {
+          notesList.appendChild(makeElement('div', {
+            style: { padding: '8px 4px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: '10.5px' }
+          }, 'No directives on this element yet. Type or paste below.'));
+          return;
+        }
+
+        notes.forEach(n => {
+          const timeStr = new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const isLLM = Boolean(n.isLLM || n.author === 'LLM');
+
+          notesList.appendChild(makeElement('div', {
+            style: {
+              background: isLLM ? 'rgba(192, 132, 252, 0.08)' : 'rgba(0, 242, 254, 0.04)',
+              borderLeft: `3px solid ${isLLM ? '#c084fc' : '#00f2fe'}`,
+              borderRadius: '4px',
+              padding: '4px 6px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '2px'
+            }
+          }, [
+            makeElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+              makeElement('span', { style: { color: isLLM ? '#c084fc' : '#00f2fe', fontSize: '9px', fontWeight: 'bold' } },
+                isLLM ? '🤖 AI Staged' : `👤 ${n.author}`
+              ),
+              makeElement('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, [
+                makeElement('span', { style: { color: '#64748b', fontSize: '8.5px' } }, timeStr),
+                makeElement('button', {
+                  style: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '9.5px', padding: '0 2px' },
+                  title: 'Delete note',
+                  onclick: async () => {
+                    CommentsItemNotes.playHapticSound('delete');
+                    await CommentsItemNotes.deleteNote(n.id);
+                    await renderNotes();
+                    if (onUpdated) onUpdated();
+                  }
+                }, '✕')
+              ])
+            ]),
+            makeElement('div', { style: { fontSize: '10.5px', color: '#f8fafc', lineHeight: '1.4', whiteSpace: 'pre-wrap' } }, n.text)
+          ]));
+        });
+      };
+
+      await renderNotes();
+
+      // Tag row
+      const tagRow = makeElement('div', { style: { display: 'flex', gap: '3px', alignItems: 'center', flexWrap: 'wrap' } });
+      ['Idea', 'Fix', 'Prompt'].forEach(t => {
+        tagRow.appendChild(makeElement('button', {
+          className: 'cp-tag-chip',
+          style: { padding: '1px 5px', fontSize: '8.5px' },
+          onclick: () => {
+            textarea.value = `[${t}] ` + textarea.value.trim();
+            textarea.focus();
+          }
+        }, t));
+      });
+      notePanel.appendChild(tagRow);
+
       const textarea = makeElement('textarea', {
-        id: 'append-item-note-textarea',
-        placeholder: 'Type directive or staging note for this element...',
+        placeholder: 'Type or paste directive for this element...',
         style: {
-          width: '100%', minHeight: '90px', background: '#090d16', color: '#f8fafc',
-          border: '1px solid #232d3f', borderRadius: '6px', padding: '8px',
-          fontFamily: 'var(--dr-font-sans)', fontSize: '12px', outline: 'none'
+          width: '100%',
+          minHeight: '80px',
+          background: '#070a13',
+          color: '#f8fafc',
+          border: '1px solid #1e293b',
+          borderRadius: '5px',
+          padding: '6px 8px',
+          fontFamily: 'inherit',
+          fontSize: '11px',
+          outline: 'none',
+          resize: 'vertical',
+          boxSizing: 'border-box'
         }
       });
-      dictationMount.appendChild(textarea);
-    }
 
-    const footer = makeElement('div', {
-      style: {
-        display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
-        paddingTop: '8px', borderTop: '1px solid rgba(255,255,255,0.08)', gap: '8px'
-      }
-    }, [
-      makeElement('button', {
-        className: 'dr-nav-btn',
-        onclick: () => dlg.close()
-      }, 'Close'),
+      textarea.addEventListener('paste', () => {
+        if (textarea.value.trim().length > 0) {
+          showToast('Preserved existing text & appended pasted content');
+        }
+      });
 
-      makeElement('button', {
-        className: 'dr-nav-btn primary',
-        style: { fontWeight: '800' },
-        onclick: async () => {
-          let txt = '';
-          if (dictationWidget) {
-            txt = dictationWidget.getText().trim();
-          } else {
-            const ta = document.getElementById('append-item-note-textarea');
-            txt = ta ? ta.value.trim() : '';
+      notePanel.appendChild(textarea);
+
+      const footerActions = makeElement('div', {
+        style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', paddingTop: '2px' }
+      }, [
+        makeElement('button', {
+          className: 'dr-nav-btn primary',
+          style: { padding: '4px 12px', fontSize: '10.5px', fontWeight: 'bold' },
+          onclick: async () => {
+            const txt = textarea.value.trim();
+            if (!txt) return;
+
+            await CommentsItemNotes.addNote(pageId, blockId, txt, {
+              dossierId,
+              author: 'Author',
+              xpath: locator.xpath,
+              isUniversalElement: !locator.isOfficial
+            });
+
+            CommentsItemNotes.playHapticSound('snap');
+            textarea.value = '';
+            await renderNotes();
+            if (onUpdated) onUpdated();
           }
+        }, '💾 Save Note')
+      ]);
+      notePanel.appendChild(footerActions);
+      wrap.appendChild(notePanel);
 
-          if (!txt) {
-            alert('Please dictate or type a note before appending.');
-            return;
-          }
+      // Panel 2: In-Situ Discussion Thread
+      const threadPanel = makeElement('div', {
+        style: { display: 'none', flexDirection: 'column', gap: '6px', flex: 1, minHeight: '220px' }
+      });
+      wrap.appendChild(threadPanel);
 
-          await CommentsItemNotes.addNote(pageId, blockId, txt, {
-            dossierId,
-            author: 'Author',
-            blockPreview: excerpt,
-            xpath: locator.xpath,
-            cssPath: locator.cssPath,
-            tagName: locator.tagName,
-            isUniversalElement: !locator.isOfficial
+      let isThreadLoaded = false;
+      function loadThread() {
+        if (isThreadLoaded) return;
+        isThreadLoaded = true;
+        threadPanel.innerHTML = '';
+
+        const threadAnchorId = `thread_${dossierId}_${pageId}_${blockId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+        if (typeof Comments !== 'undefined') {
+          const app = new Comments();
+          app.init(threadPanel, {
+            threadId: threadAnchorId,
+            showTitle: false,
+            elementAnchor: `${dossierId}:${pageId}:${blockId}`
           });
-
-          CommentsItemNotes.playHapticSound('snap');
-
-          if (dictationWidget) dictationWidget.clearContent();
-          else {
-            const ta = document.getElementById('append-item-note-textarea');
-            if (ta) ta.value = '';
-          }
-
-          await renderThread();
-          if (onUpdated) onUpdated();
-        }
-      }, '💾 + Append')
-    ]);
-    wrap.appendChild(footer);
-
-    let posX = Math.max(20, (window.innerWidth - 600) / 2);
-    let posY = 60;
-
-    const dlg = UITools.makeDialog({
-      title: `📝 Directives [${locator.isOfficial ? blockId : locator.key}]`,
-      size: [600, 560],
-      position: [posX, posY],
-      contentElement: wrap,
-      appendTo: document.body,
-      onClose: () => {
-        if (dictationWidget && typeof dictationWidget.destroy === 'function') {
-          dictationWidget.destroy();
         }
       }
-    });
 
-    return dlg;
-  }
+      function switchTab(t) {
+        activeTab = t;
+        tabNoteBtn.classList.toggle('active', t === 'note');
+        tabThreadBtn.classList.toggle('active', t === 'thread');
+        notePanel.style.display = t === 'note' ? 'flex' : 'none';
+        threadPanel.style.display = t === 'thread' ? 'flex' : 'none';
+        if (t === 'thread') loadThread();
+      }
 
+      let posX = Math.max(16, (window.innerWidth - 460) / 2);
+      let posY = 80;
+      if (targetEl) {
+        const r = targetEl.getBoundingClientRect();
+        if (r.right + 470 < window.innerWidth) {
+          posX = r.right + 12;
+          posY = Math.max(60, r.top);
+        } else if (r.left > 470) {
+          posX = r.left - 466;
+          posY = Math.max(60, r.top);
+        }
+      }
+
+      let clearRays = null;
+
+      const dlg = UITools.makeDialog({
+        title: `Note: ${locator.isOfficial ? blockId : locator.key}`,
+        size: [460, 360],
+        position: [posX, posY],
+        contentElement: wrap,
+        appendTo: document.body,
+        onClose: () => {
+          if (clearRays) clearRays();
+          if (targetEl) targetEl.classList.remove('comments-active-note-target');
+        }
+      });
+
+      if (dlg && dlg.element && targetEl) {
+        const aardvarkInst = globalThis.commentsApp?.aardvark || globalThis._cadPlanInstance?.aardvark;
+        if (aardvarkInst && typeof aardvarkInst._drawOuterCornerConnectors === 'function') {
+          clearRays = aardvarkInst._drawOuterCornerConnectors(targetEl, dlg.element);
+        }
+      }
+
+      setTimeout(() => textarea.focus(), 60);
+      return dlg;
+    }
   static playHapticSound(type = 'click') {
     try {
       if (typeof window === 'undefined') return;

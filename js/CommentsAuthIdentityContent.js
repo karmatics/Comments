@@ -38,6 +38,16 @@ class CommentsAuthIdentityContent {
           ]
         },
         {
+          section: 'community_standalone_relation',
+          partLabel: 'Chapter 2 • System Decoupling',
+          title: 'Community as an Independent Document & Voting Ledger',
+          blocks: [
+            { id: 'p_community_doc_1', type: 'p' },
+            { id: 'p_community_doc_2', type: 'p' },
+            { id: 'sidebar_community_oracle_spec', type: 'sidebar', kicker: 'Oracle Architecture', title: 'CommunityOracle Contract for Comments & Voting' }
+          ]
+        },
+        {
           section: 'name_renderer_upgrade',
           partLabel: 'Chapter 2 • Component Integration',
           title: 'NameRenderer: Author Avatars & Disambiguation',
@@ -120,6 +130,32 @@ class CommentsAuthIdentityContent {
       "• Instant disambiguation when collisions occur."
     ];
   }
+
+  static p_community_doc_1() {
+      return [
+        "A core architectural requirement of this project is that **the Community part lives as a document and system of its own**. It is not an ad-hoc table inside the comments database.",
+        "The `Community` application (`Community/src/CommunityApp.js` and `Community/src/CommunityOracle.js`) serves as the central identity, badge, and web-of-trust oracle. It tracks user credibility, authored proposals, and historical contributions independently of any single discussion thread."
+      ];
+    }
+
+  static p_community_doc_2() {
+      return [
+        "This separation of concerns is vital because **identity also powers our upcoming voting systems** (Ranked Choice, Condorcet, Instant Runoff, and Minimax). When a user votes on a policy or rates a comment's prominence, the comments engine does not invent a local score—it queries `CommunityOracle.getReputationWeight(userId)`.",
+        "By keeping `Community` independent, reputation travels across all applications: the same verified identity, tag, and reputation score govern blog comments, documentation annotations, and civic voting ballots alike."
+      ];
+    }
+
+  static sidebar_community_oracle_spec() {
+      return [
+        "CommunityOracle Shared Architecture:\n" +
+        "• Decoupled Ledger: Operates in `Community/src/CommunityOracle.js` and `Library/CommunityOracle.js`.\n" +
+        "• Web-of-Trust Vectors: Computes numeric reputation weights (0.0 to 1.0) based on peer nods.\n" +
+        "• Multi-App Integration:\n" +
+        "  - In Comments: Scales upvote prominence and suppresses probationary spam.\n" +
+        "  - In Voting: Weights pairwise Condorcet ballots and Instant Runoff transfers.\n" +
+        "• Portable Identity: A user's earned standing is preserved universally."
+      ];
+    }
 }
 
 globalThis.CommentsAuthIdentityContent = CommentsAuthIdentityContent;

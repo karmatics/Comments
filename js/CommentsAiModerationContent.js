@@ -81,18 +81,17 @@ class CommentsAiModerationContent {
 
   static p_private_channel_1() {
       return [
-        "It is important to clearly distinguish between **what works today** and **our future AI roadmap**.",
-        "Today, the prominence system is fully operable via human moderator controls. Any moderator or site owner can open a comment's feedback panel, slide its prominence from 100% down to 20%, and immediately see the visual representation adjust. The client handles the styling and layout gracefully right now."
+        "In standard forums, moderators have only one way to communicate boundaries: public reprimands or bans. Both approaches fail. Public reprimands trigger defensiveness, while bans provoke users to spawn fresh burner accounts.",
+        "Our system introduces **Direct Private Messaging & AI Coaching Whispers**. Every comment node has an accessible 'Rate / Prominence' drawer containing a dedicated private whisper channel. When a reader or peer reviewer spots a comment with valuable technical insight but an abrasive tone, they don't publicly shame the author; they submit a private whisper."
       ];
     }
 
   static p_private_channel_2() {
       return [
-        "Meanwhile, the **automated AI pipeline is a planned, speculative architecture**. We do not yet know the exact LLM agent design that will govern long-term automated scoring, nor do we mandate that every deployment run an expensive AI inference server.",
-        "Instead, we treat the AI system in this specification as a forward-looking design blueprint. We deliberately build out the full user interface—the microphone voice dictation, the private whisper channel, and the feedback review modals—so that the UI is complete, operable, and ready to be connected whenever the backend AI pipeline is finalized."
+        "The private whisper is delivered directly to the author's compose deck (`Comments.showPrivateWhisperInbox`). On their next visit, a gentle AI coaching tip appears inside their composer: *'Hey Alex, your insight on transaction volume is spot-on, but leading with dismissive language makes people defensive. Frame the advice constructively so your knowledge gets heard.'*",
+        "Because the feedback is private, constructive, and decoupled from public spectacle, commenters adjust their tone without loss of face. The community culture elevates naturally."
       ];
     }
-
   static sidebar_private_feedback_schema() {
       return [
         "Current Implementation vs. Speculative AI Roadmap:\n" +
