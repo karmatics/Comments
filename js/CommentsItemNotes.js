@@ -496,270 +496,277 @@ class CommentsItemNotes {
   }
 
   static async openBlockNotesDialog(pageId, blockId, currentDoc, onUpdated, hostReader = null, extraOptions = {}) {
-      CommentsItemNotes.playHapticSound('click');
-      const dossierId = hostReader?.options?.dossierId || currentDoc?.name || 'Comments';
-      const existingNotes = await this.getNotesForBlock(pageId, blockId, dossierId);
+    CommentsItemNotes.playHapticSound('click');
+    const dossierId = hostReader?.options?.dossierId || currentDoc?.name || 'Comments';
+    const existingNotes = await this.getNotesForBlock(pageId, blockId, dossierId);
 
-      let targetEl = extraOptions?.targetElement ||
-                     document.querySelector(`[data-block-id="${blockId}"]`) ||
-                     document.querySelector(`[data-block="${blockId}"]`) ||
-                     document.getElementById(`block-${blockId}`) ||
-                     document.getElementById(blockId);
+    let targetEl = extraOptions?.targetElement ||
+                   document.querySelector(`[data-block-id="${blockId}"]`) ||
+                   document.querySelector(`[data-block="${blockId}"]`) ||
+                   document.getElementById(`block-${blockId}`) ||
+                   document.getElementById(blockId);
 
-      if (!targetEl && existingNotes.length > 0 && existingNotes[0].xpath) {
-        try {
-          const res = document.evaluate(existingNotes[0].xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-          if (res.singleNodeValue) targetEl = res.singleNodeValue;
-        } catch (e) {}
-      }
-
-      const locator = extraOptions?.locator || (targetEl ? CommentsItemNotes.generateElementLocator(targetEl) : { key: blockId, isOfficial: true, xpath: '' });
-
-      // Clean, compact obsidian modal (460px x 360px)
-      const wrap = makeElement('div', { className: 'cp-clean-modal' });
-
-      let activeTab = 'note';
-
-      const tabNoteBtn = makeElement('button', {
-        className: 'dr-tab-btn active',
-        style: { fontSize: '10.5px', padding: '2px 8px', borderRadius: '10px' },
-        onclick: () => switchTab('note')
-      }, `📝 Note (${existingNotes.length})`);
-
-      const tabThreadBtn = makeElement('button', {
-        className: 'dr-tab-btn',
-        style: { fontSize: '10.5px', padding: '2px 8px', borderRadius: '10px' },
-        onclick: () => switchTab('thread')
-      }, '💬 Thread');
-
-      const toastSlot = makeElement('div', { style: { display: 'none' } });
-
-      const header = makeElement('div', {
-        style: {
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          borderBottom: '1px solid #1e293b', paddingBottom: '4px', flexWrap: 'wrap', gap: '4px'
-        }
-      }, [
-        makeElement('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, tabNoteBtn, tabThreadBtn),
-        makeElement('span', { style: { color: '#00f2fe', fontFamily: 'monospace', fontSize: '10.5px', fontWeight: 'bold' } },
-          `<${locator.isOfficial ? blockId : locator.key}>`
-        )
-      ]);
-      wrap.appendChild(header);
-      wrap.appendChild(toastSlot);
-
-      function showToast(msg) {
-        toastSlot.style.display = 'block';
-        toastSlot.innerHTML = '';
-        const t = makeElement('div', { className: 'cp-paste-toast' }, [
-          makeElement('span', {}, `📋 ${msg}`),
-          makeElement('button', {
-            style: { background: 'none', border: 'none', color: '#00f2fe', cursor: 'pointer', padding: '0 4px', fontWeight: 'bold' },
-            onclick: () => { toastSlot.style.display = 'none'; }
-          }, '✕')
-        ]);
-        toastSlot.appendChild(t);
-        setTimeout(() => { toastSlot.style.display = 'none'; }, 2600);
-      }
-
-      // Panel 1: Spec Note
-      const notePanel = makeElement('div', {
-        style: { display: 'flex', flexDirection: 'column', gap: '6px', flex: 1, overflow: 'hidden' }
-      });
-
-      const notesList = makeElement('div', {
-        style: { flex: 1, minHeight: '75px', maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }
-      });
-      notePanel.appendChild(notesList);
-
-      const renderNotes = async () => {
-        notesList.innerHTML = '';
-        const notes = await CommentsItemNotes.getNotesForBlock(pageId, blockId, dossierId);
-        tabNoteBtn.textContent = `📝 Note (${notes.length})`;
-
-        if (notes.length === 0) {
-          notesList.appendChild(makeElement('div', {
-            style: { padding: '8px 4px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: '10.5px' }
-          }, 'No directives on this element yet. Type or paste below.'));
-          return;
-        }
-
-        notes.forEach(n => {
-          const timeStr = new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const isLLM = Boolean(n.isLLM || n.author === 'LLM');
-
-          notesList.appendChild(makeElement('div', {
-            style: {
-              background: isLLM ? 'rgba(192, 132, 252, 0.08)' : 'rgba(0, 242, 254, 0.04)',
-              borderLeft: `3px solid ${isLLM ? '#c084fc' : '#00f2fe'}`,
-              borderRadius: '4px',
-              padding: '4px 6px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '2px'
-            }
-          }, [
-            makeElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
-              makeElement('span', { style: { color: isLLM ? '#c084fc' : '#00f2fe', fontSize: '9px', fontWeight: 'bold' } },
-                isLLM ? '🤖 AI Staged' : `👤 ${n.author}`
-              ),
-              makeElement('div', { style: { display: 'flex', gap: '4px', alignItems: 'center' } }, [
-                makeElement('span', { style: { color: '#64748b', fontSize: '8.5px' } }, timeStr),
-                makeElement('button', {
-                  style: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '9.5px', padding: '0 2px' },
-                  title: 'Delete note',
-                  onclick: async () => {
-                    CommentsItemNotes.playHapticSound('delete');
-                    await CommentsItemNotes.deleteNote(n.id);
-                    await renderNotes();
-                    if (onUpdated) onUpdated();
-                  }
-                }, '✕')
-              ])
-            ]),
-            makeElement('div', { style: { fontSize: '10.5px', color: '#f8fafc', lineHeight: '1.4', whiteSpace: 'pre-wrap' } }, n.text)
-          ]));
-        });
-      };
-
-      await renderNotes();
-
-      // Tag row
-      const tagRow = makeElement('div', { style: { display: 'flex', gap: '3px', alignItems: 'center', flexWrap: 'wrap' } });
-      ['Idea', 'Fix', 'Prompt'].forEach(t => {
-        tagRow.appendChild(makeElement('button', {
-          className: 'cp-tag-chip',
-          style: { padding: '1px 5px', fontSize: '8.5px' },
-          onclick: () => {
-            textarea.value = `[${t}] ` + textarea.value.trim();
-            textarea.focus();
-          }
-        }, t));
-      });
-      notePanel.appendChild(tagRow);
-
-      const textarea = makeElement('textarea', {
-        placeholder: 'Type or paste directive for this element...',
-        style: {
-          width: '100%',
-          minHeight: '80px',
-          background: '#070a13',
-          color: '#f8fafc',
-          border: '1px solid #1e293b',
-          borderRadius: '5px',
-          padding: '6px 8px',
-          fontFamily: 'inherit',
-          fontSize: '11px',
-          outline: 'none',
-          resize: 'vertical',
-          boxSizing: 'border-box'
-        }
-      });
-
-      textarea.addEventListener('paste', () => {
-        if (textarea.value.trim().length > 0) {
-          showToast('Preserved existing text & appended pasted content');
-        }
-      });
-
-      notePanel.appendChild(textarea);
-
-      const footerActions = makeElement('div', {
-        style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '6px', paddingTop: '2px' }
-      }, [
-        makeElement('button', {
-          className: 'dr-nav-btn primary',
-          style: { padding: '4px 12px', fontSize: '10.5px', fontWeight: 'bold' },
-          onclick: async () => {
-            const txt = textarea.value.trim();
-            if (!txt) return;
-
-            await CommentsItemNotes.addNote(pageId, blockId, txt, {
-              dossierId,
-              author: 'Author',
-              xpath: locator.xpath,
-              isUniversalElement: !locator.isOfficial
-            });
-
-            CommentsItemNotes.playHapticSound('snap');
-            textarea.value = '';
-            await renderNotes();
-            if (onUpdated) onUpdated();
-          }
-        }, '💾 Save Note')
-      ]);
-      notePanel.appendChild(footerActions);
-      wrap.appendChild(notePanel);
-
-      // Panel 2: In-Situ Discussion Thread
-      const threadPanel = makeElement('div', {
-        style: { display: 'none', flexDirection: 'column', gap: '6px', flex: 1, minHeight: '220px' }
-      });
-      wrap.appendChild(threadPanel);
-
-      let isThreadLoaded = false;
-      function loadThread() {
-        if (isThreadLoaded) return;
-        isThreadLoaded = true;
-        threadPanel.innerHTML = '';
-
-        const threadAnchorId = `thread_${dossierId}_${pageId}_${blockId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
-        if (typeof Comments !== 'undefined') {
-          const app = new Comments();
-          app.init(threadPanel, {
-            threadId: threadAnchorId,
-            showTitle: false,
-            elementAnchor: `${dossierId}:${pageId}:${blockId}`
-          });
-        }
-      }
-
-      function switchTab(t) {
-        activeTab = t;
-        tabNoteBtn.classList.toggle('active', t === 'note');
-        tabThreadBtn.classList.toggle('active', t === 'thread');
-        notePanel.style.display = t === 'note' ? 'flex' : 'none';
-        threadPanel.style.display = t === 'thread' ? 'flex' : 'none';
-        if (t === 'thread') loadThread();
-      }
-
-      let posX = Math.max(16, (window.innerWidth - 460) / 2);
-      let posY = 80;
-      if (targetEl) {
-        const r = targetEl.getBoundingClientRect();
-        if (r.right + 470 < window.innerWidth) {
-          posX = r.right + 12;
-          posY = Math.max(60, r.top);
-        } else if (r.left > 470) {
-          posX = r.left - 466;
-          posY = Math.max(60, r.top);
-        }
-      }
-
-      let clearRays = null;
-
-      const dlg = UITools.makeDialog({
-        title: `Note: ${locator.isOfficial ? blockId : locator.key}`,
-        size: [460, 360],
-        position: [posX, posY],
-        contentElement: wrap,
-        appendTo: document.body,
-        onClose: () => {
-          if (clearRays) clearRays();
-          if (targetEl) targetEl.classList.remove('comments-active-note-target');
-        }
-      });
-
-      if (dlg && dlg.element && targetEl) {
-        const aardvarkInst = globalThis.commentsApp?.aardvark || globalThis._cadPlanInstance?.aardvark;
-        if (aardvarkInst && typeof aardvarkInst._drawOuterCornerConnectors === 'function') {
-          clearRays = aardvarkInst._drawOuterCornerConnectors(targetEl, dlg.element);
-        }
-      }
-
-      setTimeout(() => textarea.focus(), 60);
-      return dlg;
+    if (!targetEl && existingNotes.length > 0 && existingNotes[0].xpath) {
+      try {
+        const res = document.evaluate(existingNotes[0].xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+        if (res.singleNodeValue) targetEl = res.singleNodeValue;
+      } catch (e) {}
     }
+
+    const locator = extraOptions?.locator || (targetEl ? CommentsItemNotes.generateElementLocator(targetEl) : { key: blockId, isOfficial: true, xpath: '' });
+
+    const wrap = makeElement('div', {
+      style: {
+        display: 'flex', flexDirection: 'column', height: '100%', gap: '8px',
+        color: '#f8fafc', fontFamily: 'var(--dr-font-sans, system-ui, sans-serif)', fontSize: '12px'
+      }
+    });
+
+    let activeTab = extraOptions?.defaultTab || 'note';
+
+    const tabNoteBtn = makeElement('button', {
+      className: `dr-tab-btn ${activeTab === 'note' ? 'active' : ''}`,
+      style: { fontSize: '10.5px', padding: '3px 10px', borderRadius: '12px' },
+      onclick: () => switchTab('note')
+    }, `📝 Spec Note (${existingNotes.length})`);
+
+    const tabThreadBtn = makeElement('button', {
+      className: `dr-tab-btn ${activeTab === 'thread' ? 'active' : ''}`,
+      style: { fontSize: '10.5px', padding: '3px 10px', borderRadius: '12px' },
+      onclick: () => switchTab('thread')
+    }, '💬 Discussion Thread');
+
+    const header = makeElement('div', {
+      style: {
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        borderBottom: '1px solid #1e293b', paddingBottom: '6px', flexWrap: 'wrap', gap: '6px'
+      }
+    }, [
+      makeElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, tabNoteBtn, tabThreadBtn),
+      makeElement('span', { style: { color: '#00f2fe', fontFamily: 'monospace', fontSize: '11px', fontWeight: 'bold' } },
+        `<${locator.isOfficial ? blockId : locator.key}>`
+      )
+    ]);
+    wrap.appendChild(header);
+
+    // --- PANEL 1: SPEC DIRECTIVES & VOICE DICTATION ---
+    const notePanel = makeElement('div', {
+      style: { display: activeTab === 'note' ? 'flex' : 'none', flexDirection: 'column', gap: '8px', flex: 1, overflow: 'hidden' }
+    });
+
+    const notesList = makeElement('div', {
+      style: { flex: 1, minHeight: '80px', maxHeight: '130px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '5px' }
+    });
+    notePanel.appendChild(notesList);
+
+    const renderNotes = async () => {
+      notesList.innerHTML = '';
+      const notes = await CommentsItemNotes.getNotesForBlock(pageId, blockId, dossierId);
+      tabNoteBtn.textContent = `📝 Spec Note (${notes.length})`;
+
+      if (notes.length === 0) {
+        notesList.appendChild(makeElement('div', {
+          style: { padding: '12px 6px', textAlign: 'center', color: '#64748b', fontStyle: 'italic', fontSize: '11px' }
+        }, 'No directives on this block yet. Dictate with voice or type below.'));
+        return;
+      }
+
+      notes.forEach(n => {
+        const timeStr = new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const isLLM = Boolean(n.isLLM || n.author === 'LLM');
+
+        notesList.appendChild(makeElement('div', {
+          style: {
+            background: isLLM ? 'rgba(192, 132, 252, 0.08)' : 'rgba(0, 242, 254, 0.04)',
+            borderLeft: `3px solid ${isLLM ? '#c084fc' : '#00f2fe'}`,
+            borderRadius: '4px',
+            padding: '6px 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px'
+          }
+        }, [
+          makeElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+            makeElement('span', { style: { color: isLLM ? '#c084fc' : '#00f2fe', fontSize: '9.5px', fontWeight: 'bold' } },
+              isLLM ? '🤖 AI Staged' : `👤 ${n.author}`
+            ),
+            makeElement('div', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, [
+              makeElement('span', { style: { color: '#64748b', fontSize: '9px' } }, timeStr),
+              makeElement('button', {
+                style: { background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '10px', padding: '0 2px' },
+                title: 'Delete note',
+                onclick: async () => {
+                  CommentsItemNotes.playHapticSound('delete');
+                  await CommentsItemNotes.deleteNote(n.id);
+                  await renderNotes();
+                  if (onUpdated) onUpdated();
+                }
+              }, '✕')
+            ])
+          ]),
+          makeElement('div', { style: { fontSize: '11px', color: '#f8fafc', lineHeight: '1.45', whiteSpace: 'pre-wrap' } }, n.text)
+        ]));
+      });
+    };
+
+    await renderNotes();
+
+    // Intent Tags & Voice Dictation Toggle Bar
+    const tagRow = makeElement('div', {
+      style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }
+    });
+
+    const chipBox = makeElement('div', { style: { display: 'flex', gap: '3px' } });
+    ['Fix', 'Idea', 'Prompt', 'Video'].forEach(t => {
+      chipBox.appendChild(makeElement('button', {
+        className: 'cp-tag-chip',
+        style: { padding: '1px 6px', fontSize: '9px' },
+        onclick: () => {
+          if (dictationWidget) {
+            dictationWidget.setText(`[${t}] ` + dictationWidget.getText());
+            dictationWidget.focus();
+          }
+        }
+      }, t));
+    });
+    tagRow.appendChild(chipBox);
+
+    // Dictation Widget Mount
+    const dictationMount = makeElement('div', {
+      style: { flex: 1, minHeight: '120px', display: 'flex', flexDirection: 'column' }
+    });
+
+    let dictationWidget = null;
+    if (typeof DictationWidget !== 'undefined') {
+      dictationWidget = new DictationWidget({
+        placeholder: '🎙️ Speak to dictate directives, or type here freely...',
+        compact: true
+      });
+      dictationMount.appendChild(dictationWidget.getElement());
+    } else {
+      const fallbackTa = makeElement('textarea', {
+        placeholder: 'Type directive for this block...',
+        style: {
+          width: '100%', flex: 1, minHeight: '110px', background: '#070a13', color: '#f8fafc',
+          border: '1px solid #1e293b', borderRadius: '6px', padding: '8px', fontSize: '12px'
+        }
+      });
+      dictationMount.appendChild(fallbackTa);
+      dictationWidget = {
+        getText: () => fallbackTa.value,
+        setText: (v) => { fallbackTa.value = v; },
+        focus: () => fallbackTa.focus(),
+        destroy: () => {}
+      };
+    }
+
+    notePanel.appendChild(tagRow);
+    notePanel.appendChild(dictationMount);
+
+    // Footer Save Action
+    const noteFooter = makeElement('div', {
+      style: { display: 'flex', justifyContent: 'flex-end', gap: '6px', paddingTop: '4px' }
+    }, [
+      makeElement('button', {
+        className: 'dr-nav-btn primary',
+        style: { padding: '5px 16px', fontSize: '11px', fontWeight: 'bold' },
+        onclick: async () => {
+          const txt = dictationWidget.getText().trim();
+          if (!txt) return;
+
+          await CommentsItemNotes.addNote(pageId, blockId, txt, {
+            dossierId,
+            author: 'Author',
+            xpath: locator.xpath,
+            isUniversalElement: !locator.isOfficial
+          });
+
+          CommentsItemNotes.playHapticSound('snap');
+          dictationWidget.setText('');
+          await renderNotes();
+          if (onUpdated) onUpdated();
+        }
+      }, '💾 Commit Directive')
+    ]);
+    notePanel.appendChild(noteFooter);
+    wrap.appendChild(notePanel);
+
+    // --- PANEL 2: CONVERSATION DISCUSSION THREAD ---
+    const threadPanel = makeElement('div', {
+      style: { display: activeTab === 'thread' ? 'flex' : 'none', flexDirection: 'column', gap: '6px', flex: 1, minHeight: '300px' }
+    });
+    wrap.appendChild(threadPanel);
+
+    let isThreadLoaded = false;
+    function loadThread() {
+      if (isThreadLoaded) return;
+      isThreadLoaded = true;
+      threadPanel.innerHTML = '';
+
+      const threadAnchorId = `thread_${dossierId}_${pageId}_${blockId}`.replace(/[^a-zA-Z0-9_-]/g, '_');
+      if (typeof Comments !== 'undefined') {
+        const app = new Comments();
+        app.init(threadPanel, {
+          threadId: threadAnchorId,
+          showTitle: false,
+          elementAnchor: `${dossierId}:${pageId}:${blockId}`
+        });
+      }
+    }
+
+    if (activeTab === 'thread') {
+      loadThread();
+    }
+
+    function switchTab(t) {
+      activeTab = t;
+      tabNoteBtn.classList.toggle('active', t === 'note');
+      tabThreadBtn.classList.toggle('active', t === 'thread');
+      notePanel.style.display = t === 'note' ? 'flex' : 'none';
+      threadPanel.style.display = t === 'thread' ? 'flex' : 'none';
+      if (t === 'thread') loadThread();
+    }
+
+    let posX = Math.max(16, (window.innerWidth - 500) / 2);
+    let posY = 75;
+    if (targetEl) {
+      const r = targetEl.getBoundingClientRect();
+      if (r.right + 510 < window.innerWidth) {
+        posX = r.right + 14;
+        posY = Math.max(60, r.top);
+      } else if (r.left > 510) {
+        posX = r.left - 506;
+        posY = Math.max(60, r.top);
+      }
+    }
+
+    let clearRays = null;
+
+    const dlg = UITools.makeDialog({
+      title: `In-Situ: <${locator.isOfficial ? blockId : locator.key}>`,
+      size: [500, 420],
+      position: [posX, posY],
+      contentElement: wrap,
+      appendTo: document.body,
+      onClose: () => {
+        if (clearRays) clearRays();
+        if (dictationWidget && typeof dictationWidget.destroy === 'function') {
+          dictationWidget.destroy();
+        }
+        if (targetEl) targetEl.classList.remove('comments-active-note-target');
+      }
+    });
+
+    if (dlg && dlg.element && targetEl) {
+      const aardvarkInst = globalThis.commentsApp?.aardvark || globalThis._cadPlanInstance?.aardvark;
+      if (aardvarkInst && typeof aardvarkInst._drawOuterCornerConnectors === 'function') {
+        clearRays = aardvarkInst._drawOuterCornerConnectors(targetEl, dlg.element);
+      }
+    }
+
+    setTimeout(() => dictationWidget.focus(), 60);
+    return dlg;
+  }
   static playHapticSound(type = 'click') {
     try {
       if (typeof window === 'undefined') return;
